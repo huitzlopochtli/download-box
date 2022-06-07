@@ -1,0 +1,124 @@
+version: "3.4"
+services:
+  # Comment out nordvpn service if you want to use nordvpn
+  # this container will run on openvpn which is quite slow and resource heavy
+  # nordvpn:
+  #   container_name: nordvpn
+  #   image: azinchen/nordvpn:latest
+  #   cap_add:
+  #     - net_admin
+  #   devices:
+  #     - /dev/net/tun
+  #   environment:
+  #     - USER=${NORD_EMAIL}
+  #     - PASS=${NORD_PASS}
+  #     - COUNTRY=United States;Japan;Spain;Hong Kong;IE
+  #     - GROUP=Standard VPN servers
+  #     - RANDOM_TOP=10
+  #     - RECREATE_VPN_CRON=5 */3 * * *
+  #     - NETWORK=192.168.69.0/24
+  #     - OPENVPN_OPTS=--mute-replay-warnings
+  #   ports:
+  #     - 8112:8112
+  #     - 9117:9117
+  #   restart: unless-stopped
+  
+  transmission:
+    image: lscr.io/linuxserver/transmission
+    container_name: transmission
+    network_mode: host # run on the host network
+    # network_mode: nordvpn # run on the vpn network
+    restart: unless-stopped
+    environment:
+      - PUID=${PUID} # default user id, defined in .env
+      - PGID=${PGID} # default group id, defined in .env
+      - TZ=${TZ} # timezone, defined in .env
+      - USER=admin #optional
+      - PASS=admin #optional
+    volumes:
+      - ${ROOT}/downloads:/downloads # downloads folder
+      - ${ROOT}/complete:/complete # completed shows folder
+      - ${ROOT}/config/deluge:/config # config files
+      - ${ROOT}/downloads/torrent-blackhole:/watch # torrent files
+
+  jackett:
+    container_name: jackett
+    image: linuxserver/jackett:latest
+    restart: unless-stopped
+    network_mode: host
+    environment:
+      - PUID=${PUID} # default user id, defined in .env
+      - PGID=${PGID} # default group id, defined in .env
+      - TZ=${TZ} # timezone, defined in .env
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
+      - ${ROOT}/downloads/torrent-blackhole:/downloads # place where to put .torrent files for manual download
+      - ${ROOT}/config/jackett:/config # config files
+
+  sonarr:
+    container_name: sonarr
+    image: linuxserver/sonarr:latest
+    restart: unless-stopped
+    network_mode: host
+    environment:
+      - PUID=${PUID} # default user id, defined in .env
+      - PGID=${PGID} # default group id, defined in .env
+      - TZ=${TZ} # timezone, defined in .env
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
+      - ${ROOT}/config/sonarr:/config # config files
+      - ${ROOT}/complete/tv:/tv # tv shows folder
+      - ${ROOT}/downloads:/downloads # download folder
+
+  radarr:
+    container_name: radarr
+    image: linuxserver/radarr:latest
+    restart: unless-stopped
+    network_mode: host
+    environment:
+      - PUID=${PUID} # default user id, defined in .env
+      - PGID=${PGID} # default group id, defined in .env
+      - TZ=${TZ} # timezone, defined in .env
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
+      - ${ROOT}/config/radarr:/config # config files
+      - ${ROOT}/complete/movies:/movies # movies folder
+      - ${ROOT}/downloads:/downloads # download folder
+
+  plex-server:
+    container_name: plex-server
+    image: plexinc/pms-docker:latest
+    restart: unless-stopped
+    environment:
+      - TZ=${TZ} # timezone, defined in .env
+    network_mode: host
+    volumes:
+      - ${ROOT}/config/plex/db:/config # plex database
+      - ${ROOT}/config/plex/transcode:/transcode # temp transcoded files
+      - ${ROOT}/complete:/data # media library
+
+  samba:
+    container_name: samba
+    image: elswork/samba:latest
+    environment:
+      - TZ=${TZ}' # timezone, defined in .env
+      - PUID=${PUID} # default user id, defined in .env
+      - PGID=${PGID} # default group id, defined in .env
+      - SMB_USER=${SMB_USER} # SMB user name, defined in .env
+      - SMB_PWD=${SMB_PWD} # SMB group, defined in .env
+    network_mode: host
+    ports:
+      - "137:137/udp"
+      - "138:138/udp"
+      - "139:139/tcp"
+      - "445:445/tcp"
+    read_only: false
+    tmpfs:
+      - /tmp
+    restart: unless-stopped
+    stdin_open: true
+    tty: true
+    volumes:
+      - ${ROOT}/complete:/data/complete:z
+      - ${ROOT}/downloads:/data/downloads:z
+    command: '-u "${PUID}:${PGID}:${SMB_USER}:${SMB_USER}:${SMB_PWD}" -s "data:/data:rw:${SMB_USER}"'
